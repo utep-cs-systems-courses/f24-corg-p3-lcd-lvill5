@@ -20,7 +20,6 @@
 
 #define SWITCHES 15                                                
 
-char blue = 31, green = 0, red = 31;
 short drawPos[2] = {screenWidth / 2,(SCREEN_HEIGHT + TITLE_HEIGHT)/2};
 int switches = 0;
 volatile char redrawScreen = 0;
@@ -50,16 +49,7 @@ void clear_screen(){
   clearScreen(COLOR_BLUE);  // Clear the entire screen
   drawString5x7(10, 10, "Etch Sketch", COLOR_RED, COLOR_BLUE);  // Redraw the title
 }
-/**
-void draw_cursor(int col, int row){
- 
-  draw_pixel(col, row, COLOR_WHITE);//center
-  draw_pixel(col- 1 , row,COLOR_WHITE);//left
-  draw_pixel(col+1, row, COLOR_WHITE);//right
-  draw_pixel(col, row-1, COLOR_WHITE);//top
-  draw_pixel(col, row+1, COLOR_WHITE);//bottom
-}
-*/
+
 void draw_cursor(int col, int row) {
   unsigned short color = cursor_colors[cursor_color_index];
   draw_pixel(col, row, color);      // Center
@@ -147,9 +137,6 @@ if((switches & SW_DOWN) && (switches & SW_RIGHT)){
 	drawPos[1] = SCREEN_HEIGHT + TITLE_HEIGHT / 2; // Reset position
         redrawScreen =1;
   }
-  if(redrawScreen){
-    draw_cursor(drawPos[0],drawPos[1]);
-  }
   
 }
 void wdt_c_handler(){
@@ -157,9 +144,7 @@ void wdt_c_handler(){
   secCount ++;
   if (secCount >= 10) {
     cursor_color_index = (cursor_color_index + 1) % num_colors; // Increment the color index and wrap around
-
     redrawScreen = 1; // Set redraw flag to true so cursor gets redrawn
-
     secCount = 0; 
   }
   // update_position();
@@ -168,11 +153,14 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A() {
   // Change the cursor color every time the interrupt is triggered
   cursor_color_index = (cursor_color_index + 1) % num_colors; // Increment the color index and wrap around
   redrawScreen = 1; // Set redraw flag to true so cursor gets redrawn
+
 }
+
 void timer_init() {
   TA0CCR0 = 32768 - 1;               // Set the timer count for 1 second (ACLK = 32768Hz)
   TA0CCTL0 = CCIE;                   // Enable capture/compare interrupt
   TA0CTL = TASSEL_1 | MC_1 | TACLR;  // ACLK, Up mode, Clear timer
+
 }
 void main()
 {
@@ -198,7 +186,6 @@ void main()
       
     }
     update_position();
-    
     P1OUT &= ~LED;/* led off */
     or_sr(0x10);/**< CPU OFF */
     P1OUT |= LED;/* led on */
