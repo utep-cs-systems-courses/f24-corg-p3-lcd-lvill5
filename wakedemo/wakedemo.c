@@ -2,6 +2,7 @@
 #include <libTimer.h>
 #include "lcdutils.h"
 #include "lcddraw.h"
+#include "buzzer.h"
 
 // WARNING: LCD DISPLAY USES P1.0.  Do not touch!!! 
 
@@ -19,18 +20,12 @@
 
 #define SWITCHES 15                                                
 
-short drawPo [2] = {1,10}, controlPo [2] = {2,10};
-short colVelocity = 1, colLimits[2] = {1, screenWidth};
-short rowLimits[2] = {1, screenHeight - 2};
-short direction[2] = {1,0};
-
 char blue = 31, green = 0, red = 31;
 short drawPos[2] = {screenWidth / 2,(SCREEN_HEIGHT + TITLE_HEIGHT)/2};
 int switches = 0;
 volatile char redrawScreen = 0;
-static char
 
-switch_update_interrupt_sense()
+static char switch_update_interrupt_sense()
 {
   char p2val = P2IN;
   P2IES |= (p2val & SWITCHES);
@@ -66,6 +61,7 @@ switch_interrupt_handler()
 {
   char p2val = switch_update_interrupt_sense();
   switches = ~p2val & SWITCHES;
+   buzzer_set_period(2000);
 }
 
 void update_position(){
@@ -75,6 +71,7 @@ void update_position(){
     if (drawPos[1] > TITLE_HEIGHT){
       drawPos[1]--;
       redrawScreen = 1;
+      buzzer_set_period(2000);
     }
   }
   if (switches & SW_DOWN){
@@ -135,6 +132,7 @@ if((switches & SW_DOWN) && (switches & SW_RIGHT)){
   if(redrawScreen){
     draw_cursor(drawPos[0],drawPos[1]);
   }
+  
 }
 void wdt_c_handler(){
 
@@ -156,13 +154,12 @@ void wdt_c_handler(){
 void main()
 {
   P1DIR |= LED;/**< Green led on when CPU on */
-
-  P1OUT |= LED;
+  P1OUT |= LED; // turn on led initially
 
   configureClocks();
-
   lcd_init();
-
+  buzzer_init();
+  
   switch_init();
   enableWDTInterrupts();      /**< enable periodic interrupt */
   or_sr(0x8);              /**< GIE (enable interrupts) */
@@ -170,19 +167,16 @@ void main()
   draw_cursor(drawPos[0], drawPos[1]);
  
   while (1) {/* forever */
-
     if (redrawScreen) {
-      
       draw_cursor(drawPos[0], drawPos[1]);
       redrawScreen = 0;
       
     }
 
     P1OUT &= ~LED;/* led off */
-
     or_sr(0x10);/**< CPU OFF */
-
     P1OUT |= LED;/* led on */
+    
   }
 }
 
