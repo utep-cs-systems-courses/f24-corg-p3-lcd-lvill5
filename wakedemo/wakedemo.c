@@ -24,7 +24,7 @@ char blue = 31, green = 0, red = 31;
 short drawPos[2] = {screenWidth / 2,(SCREEN_HEIGHT + TITLE_HEIGHT)/2};
 int switches = 0;
 volatile char redrawScreen = 0;
-const unsigned short cursor_colors[] = {COLOR_WHITE, COLOR_RED, COLOR_GREEN, COLOR_BLUE, COLOR_YELLOW};
+const unsigned short cursor_colors[] = {COLOR_WHITE, COLOR_RED, COLOR_GREEN, COLOR_YELLOW};
 const int num_colors = sizeof(cursor_colors) / sizeof(cursor_colors[0]);
 int cursor_color_index = 0; // Current cursor color index
 
@@ -83,6 +83,7 @@ switch_interrupt_handler()
 
 void update_position(){
   // erase_cursor(drawPos[0], drawPos[1]);
+  draw_pixel(drawPos[0], drawPos[1], COLOR_BLUE);
   
   if(switches & SW_UP){
     if (drawPos[1] > TITLE_HEIGHT){
@@ -154,15 +155,12 @@ if((switches & SW_DOWN) && (switches & SW_RIGHT)){
 void wdt_c_handler(){
   static int secCount = 0;
   secCount ++;
-  if (secCount >= 10) {	 
-    if(redrawScreen) {   			      
-      update_position();
-      draw_cursor(drawPos[0], drawPos[1]);
-      draw_pixel(drawPos[0], drawPos[1], COLOR_WHITE);
-      redrawScreen = 0;
-    }
-     secCount = 0;
-     update_position();
+  if (secCount >= 10) {
+    cursor_color_index = (cursor_color_index + 1) % num_colors; // Increment the color index and wrap around
+
+    redrawScreen = 1; // Set redraw flag to true so cursor gets redrawn
+
+    secCount = 0; 
   }
   // update_position();
  }
@@ -194,11 +192,13 @@ void main()
  
   while (1) {/* forever */
     if (redrawScreen) {
+      
       draw_cursor(drawPos[0], drawPos[1]);
       redrawScreen = 0;
       
     }
-
+    update_position();
+    
     P1OUT &= ~LED;/* led off */
     or_sr(0x10);/**< CPU OFF */
     P1OUT |= LED;/* led on */
