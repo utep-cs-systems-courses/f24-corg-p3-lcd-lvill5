@@ -7,38 +7,60 @@
 
 #define LED BIT6		/* note that bit zero req'd for display */
 
-#define SW1 1
-#define SW2 2
-#define SW3 4
-#define SW4 8
+#define SCREEN_WIDTH 120
+#define SCREEN_HEIGHT 160
+#define TITLE_HEIGHT 20
 
-#define SWITCHES 15
+#define SW_UP 1
+#define SW_DOWN 2
+#define SW_LEFT 4
+#define SW_RIGHT 8
+#define SW_CLEAR BIT4
+
+#define SWITCHES 15                                                
+
+short drawPo [2] = {1,10}, controlPo [2] = {2,10};
+short colVelocity = 1, colLimits[2] = {1, screenWidth};
+short rowLimits[2] = {1, screenHeight - 2};
+short direction[2] = {1,0};
 
 char blue = 31, green = 0, red = 31;
-unsigned char step = 0;
+short drawPos[2] = {screenWidth / 2,(SCREEN_HEIGHT + TITLE_HEIGHT)/2};
+int switches = 0;
+volatile char redrawScreen = 0;
+static char
 
-static char 
 switch_update_interrupt_sense()
 {
   char p2val = P2IN;
-  /* update switch interrupt to detect changes from current buttons */
-  P2IES |= (p2val & SWITCHES);	/* if switch up, sense down */
-  P2IES &= (p2val | ~SWITCHES);	/* if switch down, sense up */
+  P2IES |= (p2val & SWITCHES);
+  P2IES &= (p2val | ~SWITCHES);
   return p2val;
 }
-
-void 
-switch_init()			/* setup switch */
-{  
-  P2REN |= SWITCHES;		/* enables resistors for switches */
-  P2IE |= SWITCHES;		/* enable interrupts from switches */
-  P2OUT |= SWITCHES;		/* pull-ups for switches */
-  P2DIR &= ~SWITCHES;		/* set switches' bits for input */
+void switch_init(){
+  P2REN |= SWITCHES;
+  P2IE |= SWITCHES;
+  P2OUT |= SWITCHES;
+  P2DIR &= ~ SWITCHES;
   switch_update_interrupt_sense();
 }
 
-int switches = 0;
+void draw_pixel (int col, int row, unsigned short color){
+  fillRectangle(col,row,1,1,color);
+}
+void clear_screen(){
+  clearScreen(COLOR_BLUE);
+  drawString5x7(10,10, "Etch Sketch", COLOR_RED, COLOR_BLUE);
+}
 
+void draw_cursor(int col, int row){
+  draw_pixel(col, row, COLOR_WHITE);//center
+  draw_pixel(col- 1 , row, COLOR_WHITE);//left
+  draw_pixel(col+1, row, COLOR_WHITE);//right
+  draw_pixel(col, row-1, COLOR_WHITE);//top
+  draw_pixel(col, row+1, COLOR_WHITE);//bottom
+}
+  
 void
 switch_interrupt_handler()
 {
@@ -46,127 +68,123 @@ switch_interrupt_handler()
   switches = ~p2val & SWITCHES;
 }
 
-
-// axis zero for col, axis 1 for row
-
-short drawPos[2] = {1,10}, controlPos[2] = {2, 10};
-short colVelocity = 1, colLimits[2] = {1, screenWidth/2};
-
-void
-draw_ball(int col, int row, unsigned short color)
-{
-  fillRectangle(col-1, row-1, 3, 3, color);
-}
-
-
-void
-screen_update_ball()
-{
-  for (char axis = 0; axis < 2; axis ++) 
-    if (drawPos[axis] != controlPos[axis]) /* position changed? */
-      goto redraw;
-  return;			/* nothing to do */
- redraw:
-  draw_ball(drawPos[0], drawPos[1], COLOR_BLUE); /* erase */
-  for (char axis = 0; axis < 2; axis ++) 
-    drawPos[axis] = controlPos[axis];
-  draw_ball(drawPos[0], drawPos[1], COLOR_WHITE); /* draw */
-}
+void update_position(){
+  // erase_cursor(drawPos[0], drawPos[1]);
   
+  if(switches & SW_UP){
+    if (drawPos[1] > TITLE_HEIGHT){
+      drawPos[1]--;
+      redrawScreen = 1;
+    }
+  }
+  if (switches & SW_DOWN){
+    if (drawPos[1] < SCREEN_HEIGHT + TITLE_HEIGHT -1){
+      drawPos[1]++;
+      redrawScreen = 1;
+    }
+  }
+  if (switches & SW_LEFT) {
+    if (drawPos[0] > 0){
+	  drawPos[0]--;
+	  redrawScreen = 1;
+    }
+  }
+  if (switches & SW_RIGHT) {
+    if (drawPos[0] < SCREEN_WIDTH- 1){
+      drawPos[0]++;
+      redrawScreen = 1;
+    }
+  }
 
-short redrawScreen = 1;
-u_int controlFontColor = COLOR_GREEN;
+  //diagonal movement
+  if((switches & SW_UP) && (switches & SW_LEFT)){
+    if (drawPos[1] > TITLE_HEIGHT && drawPos[0] > 0){
+      drawPos[1]--; // move up
+      drawPos[0] --; // move left
+      redrawScreen = 1;
+    }
+  }
+  if((switches & SW_UP) && (switches & SW_RIGHT)){
+    if(drawPos[1] > TITLE_HEIGHT && drawPos[0] < SCREEN_WIDTH -1){
+      drawPos[1]--;//Move up
+      drawPos[0]++; // Move right
+      redrawScreen = 1;
+    }
+  }
+  if((switches & SW_DOWN) && (switches & SW_LEFT)){
+    if(drawPos[1] < SCREEN_HEIGHT + TITLE_HEIGHT -1 && drawPos[0] > 0 ){
+      drawPos[1]++; // move down
+      drawPos[0]--;
+      redrawScreen = 1;
+    }
+  }
+if((switches & SW_DOWN) && (switches & SW_RIGHT)){
+  if(drawPos[1] < SCREEN_HEIGHT + TITLE_HEIGHT -1 && drawPos[0] < SCREEN_HEIGHT -1 ){
+    drawPos[1]++;
+    drawPos[0]++;
+    redrawScreen =1;
+  }
+ }
+    
+  if(switches & SW_CLEAR) {
+	clear_screen(); // Clear the screen
+	drawPos[0] = SCREEN_WIDTH / 2; // Reset position
+	drawPos[1] = SCREEN_HEIGHT + TITLE_HEIGHT / 2; // Reset position
+        redrawScreen =1;
+  }
+  if(redrawScreen){
+    draw_cursor(drawPos[0],drawPos[1]);
+  }
+}
+void wdt_c_handler(){
 
-void wdt_c_handler()
-{
   static int secCount = 0;
 
   secCount ++;
-  if (secCount >= 25) {		/* 10/sec */
-   
-    {				/* move ball */
-      short oldCol = controlPos[0];
-      short newCol = oldCol + colVelocity;
-      if (newCol <= colLimits[0] || newCol >= colLimits[1])
-	colVelocity = -colVelocity;
-      else
-	controlPos[0] = newCol;
+  if (secCount >= 10) {	 
+    if(redrawScreen) {   			      
+      update_position();
+      draw_pixel(drawPos[0], drawPos[1], COLOR_WHITE);
+      redrawScreen = 0;
     }
-
-    {				/* update hourglass */
-      if (switches & SW3) green = (green + 1) % 64;
-      if (switches & SW2) blue = (blue + 2) % 32;
-      if (switches & SW1) red = (red - 3) % 32;
-      if (step <= 30)
-	step ++;
-      else
-	step = 0;
       secCount = 0;
-    }
-    if (switches & SW4) return;
-    redrawScreen = 1;
+      update_position();
   }
+  // update_position();
 }
-  
-void update_shape();
 
 void main()
 {
-  
-  P1DIR |= LED;		/**< Green led on when CPU on */
+  P1DIR |= LED;/**< Green led on when CPU on */
+
   P1OUT |= LED;
+
   configureClocks();
+
   lcd_init();
+
   switch_init();
-  
   enableWDTInterrupts();      /**< enable periodic interrupt */
-  or_sr(0x8);	              /**< GIE (enable interrupts) */
-  
-  clearScreen(COLOR_BLUE);
-  while (1) {			/* forever */
+  or_sr(0x8);              /**< GIE (enable interrupts) */
+  clear_screen();
+  draw_cursor(drawPos[0], drawPos[1]);
+ 
+  while (1) {/* forever */
+
     if (redrawScreen) {
+      
+      draw_cursor(drawPos[0], drawPos[1]);
       redrawScreen = 0;
-      update_shape();
+      
     }
-    P1OUT &= ~LED;	/* led off */
-    or_sr(0x10);	/**< CPU OFF */
-    P1OUT |= LED;	/* led on */
+
+    P1OUT &= ~LED;/* led off */
+
+    or_sr(0x10);/**< CPU OFF */
+
+    P1OUT |= LED;/* led on */
   }
 }
-
-void
-screen_update_hourglass()
-{
-  static unsigned char row = screenHeight / 2, col = screenWidth / 2;
-  static char lastStep = 0;
-  
-  if (step == 0 || (lastStep > step)) {
-    clearScreen(COLOR_BLUE);
-    lastStep = 0;
-  } else {
-    for (; lastStep <= step; lastStep++) {
-      int startCol = col - lastStep;
-      int endCol = col + lastStep;
-      int width = 1 + endCol - startCol;
-      
-      // a color in this BGR encoding is BBBB BGGG GGGR RRRR
-      unsigned int color = (blue << 11) | (green << 5) | red;
-      
-      fillRectangle(startCol, row+lastStep, width, 1, color);
-      fillRectangle(startCol, row-lastStep, width, 1, color);
-    }
-  }
-}  
-
-
-    
-void
-update_shape()
-{
-  screen_update_ball();
-  screen_update_hourglass();
-}
-   
 
 
 void
@@ -176,3 +194,4 @@ __interrupt_vec(PORT2_VECTOR) Port_2(){
     switch_interrupt_handler();	/* single handler for all switches */
   }
 }
+
